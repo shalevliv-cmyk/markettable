@@ -140,7 +140,7 @@
       </div>
       <div class="query-missing" id="q-missing"></div>
       <div class="query-prompt" id="q-preview">Enter a ticker to see which AIs are missing predictions.</div>
-      <div class="query-copied" id="q-copied">&#x2713; Prompt copied to clipboard &#x2014; paste it in any AI that didn&#x27;t auto-fill</div>
+      <div class="query-copied" id="q-copied">&#x2713; Prompt copied to clipboard &#x2014; paste into AIs marked &#x270D;paste</div>
     </div>
   </div>
 
@@ -509,14 +509,16 @@ var STOCKS = {
   'PONY':'Pony AI','NVDA':'Nvidia','DELL':'Dell Technologies'
 };
 
-var AI_URLS = {
-  ChatGPT:    function(q){ return 'https://chatgpt.com/?q=' + encodeURIComponent(q); },
-  Gemini:     function(q){ return 'https://gemini.google.com/app'; },
-  Copilot:    function(q){ return 'https://copilot.microsoft.com/?q=' + encodeURIComponent(q); },
-  Perplexity: function(q){ return 'https://www.perplexity.ai/search?q=' + encodeURIComponent(q); },
-  Claude:     function(q){ return 'https://claude.ai/new?q=' + encodeURIComponent(q); },
-  Grok:       function(q){ return 'https://grok.com/'; }
+var AI_CONFIG = {
+  ChatGPT:    { url: function(q){ return 'https://chatgpt.com/?q=' + encodeURIComponent(q); },    auto: true  },
+  Gemini:     { url: function(q){ return 'https://gemini.google.com/app'; },                       auto: false },
+  Copilot:    { url: function(q){ return 'https://copilot.microsoft.com/?q=' + encodeURIComponent(q); }, auto: true  },
+  Perplexity: { url: function(q){ return 'https://www.perplexity.ai/search?q=' + encodeURIComponent(q); }, auto: true },
+  Claude:     { url: function(q){ return 'https://claude.ai/new?q=' + encodeURIComponent(q); },   auto: false },
+  Grok:       { url: function(q){ return 'https://grok.com/'; },                                   auto: false }
 };
+var AI_URLS = {};
+Object.keys(AI_CONFIG).forEach(function(k){ AI_URLS[k] = AI_CONFIG[k].url; });
 
 function buildPrompt(name, ticker) {
   return 'i need you to analyze this stock based on their last few years performance, earning reports and recent news, and give 3 things: 1. their next 2 earning reports dates. 2. the most probable movement for the stock until those dates, in percent. 3. what is the chance for your prediction to be right with up to 3% margin of error. stock name: ' + name + '\\' + ticker;
@@ -565,14 +567,17 @@ function updateUI() {
   var status = getMissingAIs(ticker);
   if (status) {
     var html = '';
-    status.missing.forEach(function(ai){ html += '<span class="q-tag q-tag-missing">&#x25CF; ' + ai + ' missing</span>'; });
+    status.missing.forEach(function(ai){
+      var sendLabel = (AI_CONFIG[ai] && AI_CONFIG[ai].auto) ? ' &#x21A6;auto' : ' &#x270D;paste';
+      html += '<span class="q-tag q-tag-missing">&#x25CF; ' + ai + sendLabel + '</span>';
+    });
     status.done.forEach(function(ai){ html += '<span class="q-tag q-tag-done">&#x2713; ' + ai + '</span>'; });
     missingDiv.innerHTML = html;
     btn.textContent = status.missing.length > 0
       ? 'Open ' + status.missing.length + ' Missing AI' + (status.missing.length > 1 ? 's' : '') + ' ↗'
       : 'All AIs filled ✓';
   } else {
-    missingDiv.innerHTML = '<span class="q-tag q-tag-missing">New stock — will open all 6 AIs</span>';
+    var allTags = Object.keys(AI_CONFIG).map(function(ai){ var lbl=(AI_CONFIG[ai].auto)?'&#x21A6;auto':'&#x270D;paste'; return '<span class="q-tag q-tag-missing">'+ai+' '+lbl+'</span>'; }).join(''); missingDiv.innerHTML = allTags;
     btn.textContent = 'Open All AIs ↗';
   }
 
@@ -609,6 +614,7 @@ function queryAIs() {
 </script>
 </body>
 </html>
+
 
 
 
