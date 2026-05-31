@@ -74,6 +74,10 @@
   .query-btn:active{transform:scale(.97)}
   .query-prompt{font-size:11px;color:var(--text3);line-height:1.7;padding:12px 14px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)}
   .query-prompt strong{color:var(--text2)}
+  .query-missing{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;min-height:0}
+  .q-tag{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid;letter-spacing:.03em}
+  .q-tag-missing{border-color:rgba(248,113,113,.4);color:#f87171;background:rgba(248,113,113,.06)}
+  .q-tag-done{border-color:rgba(74,222,128,.3);color:#4ade80;background:rgba(74,222,128,.06)}
   .query-copied{font-size:11px;color:#4ade80;margin-top:8px;opacity:0;transition:opacity .3s}
   .query-copied.show{opacity:1}
 </style>
@@ -100,21 +104,43 @@
     </div>
   </header>
   <div class="query-section">
-    <div class="section-label">Query all AIs</div>
+    <div class="section-label">Query missing AIs</div>
     <div class="query-card">
       <div class="query-row">
+        <div class="query-field">
+          <label>Ticker</label>
+          <input class="query-input" id="q-ticker" type="text" placeholder="e.g. NVDA" style="width:140px" list="stock-list" autocomplete="off">
+          <datalist id="stock-list">
+            <option value="PL">Planet Labs</option>
+            <option value="TA-35">Tel Aviv 35 Index</option>
+            <option value="SPY">S&amp;P 500 ETF</option>
+            <option value="GE">GE Aerospace</option>
+            <option value="GOOG">Alphabet Class C</option>
+            <option value="MSFT">Microsoft</option>
+            <option value="NBIS">Nebius Group</option>
+            <option value="FIX">Comfort Systems USA</option>
+            <option value="TSLA">Tesla</option>
+            <option value="META">Meta Platforms</option>
+            <option value="RKLB">Rocket Lab</option>
+            <option value="CAT">Caterpillar</option>
+            <option value="PLTR">Palantir</option>
+            <option value="OKLO">Oklo</option>
+            <option value="NXSN">Next Vision</option>
+            <option value="WMT">Walmart</option>
+            <option value="PONY">Pony AI</option>
+            <option value="NVDA">Nvidia</option>
+            <option value="DELL">Dell Technologies</option>
+          </datalist>
+        </div>
         <div class="query-field">
           <label>Stock Name</label>
           <input class="query-input" id="q-name" type="text" placeholder="e.g. Nvidia">
         </div>
-        <div class="query-field">
-          <label>Ticker</label>
-          <input class="query-input" id="q-ticker" type="text" placeholder="e.g. NVDA" style="width:120px">
-        </div>
-        <button class="query-btn" onclick="queryAllAIs()">Open All AIs &#x2197;</button>
+        <button class="query-btn" id="q-btn" onclick="queryAIs()">Open AIs &#x2197;</button>
       </div>
-      <div class="query-prompt" id="q-preview">Enter a stock name and ticker to preview the prompt.</div>
-      <div class="query-copied" id="q-copied">&#x2713; Prompt copied to clipboard — paste it in any AI that didn't auto-fill</div>
+      <div class="query-missing" id="q-missing"></div>
+      <div class="query-prompt" id="q-preview">Enter a ticker to see which AIs are missing predictions.</div>
+      <div class="query-copied" id="q-copied">&#x2713; Prompt copied to clipboard &#x2014; paste it in any AI that didn&#x27;t auto-fill</div>
     </div>
   </div>
 
@@ -475,7 +501,15 @@
   <footer>Built with <span>Claude</span> Â· AI predictions for informational purposes only Â· Not financial advice Â· Last updated: 2026-06-01</footer>
 </div>
 <script>
-const AI_URLS = {
+var STOCKS = {
+  'PL':'Planet Labs','TA-35':'Tel Aviv 35 Index','SPY':'S&P 500 ETF','GE':'GE Aerospace',
+  'GOOG':'Alphabet Class C','MSFT':'Microsoft','NBIS':'Nebius Group','FIX':'Comfort Systems USA',
+  'TSLA':'Tesla','META':'Meta Platforms','RKLB':'Rocket Lab','CAT':'Caterpillar',
+  'PLTR':'Palantir','OKLO':'Oklo','NXSN':'Next Vision','WMT':'Walmart',
+  'PONY':'Pony AI','NVDA':'Nvidia','DELL':'Dell Technologies'
+};
+
+var AI_URLS = {
   ChatGPT:    function(q){ return 'https://chatgpt.com/?q=' + encodeURIComponent(q); },
   Gemini:     function(q){ return 'https://gemini.google.com/app'; },
   Copilot:    function(q){ return 'https://copilot.microsoft.com/?q=' + encodeURIComponent(q); },
@@ -488,28 +522,86 @@ function buildPrompt(name, ticker) {
   return 'i need you to analyze this stock based on their last few years performance, earning reports and recent news, and give 3 things: 1. their next 2 earning reports dates. 2. the most probable movement for the stock until those dates, in percent. 3. what is the chance for your prediction to be right with up to 3% margin of error. stock name: ' + name + '\\' + ticker;
 }
 
-function updatePreview() {
-  var name = document.getElementById('q-name').value.trim();
+function getMissingAIs(ticker) {
+  var headers = document.querySelectorAll('table thead th');
+  var colIndex = -1;
+  for (var i = 0; i < headers.length; i++) {
+    var text = headers[i].childNodes[0] ? headers[i].childNodes[0].textContent.trim() : '';
+    if (text === ticker) { colIndex = i; break; }
+  }
+  if (colIndex === -1) return null;
+  var rows = document.querySelectorAll('table tbody tr:not(.avg-row)');
+  var missing = [], done = [];
+  rows.forEach(function(row) {
+    var aiName = row.querySelector('.ai-name');
+    if (!aiName) return;
+    var name = aiName.textContent.trim();
+    var cell = row.cells[colIndex];
+    if (cell && cell.classList.contains('ph')) { missing.push(name); }
+    else { done.push(name); }
+  });
+  return { missing: missing, done: done };
+}
+
+function updateUI() {
   var ticker = document.getElementById('q-ticker').value.trim().toUpperCase();
+  var name = document.getElementById('q-name').value.trim();
   var preview = document.getElementById('q-preview');
-  if (!name && !ticker) {
-    preview.innerHTML = 'Enter a stock name and ticker to preview the prompt.';
+  var missingDiv = document.getElementById('q-missing');
+  var btn = document.getElementById('q-btn');
+
+  if (STOCKS[ticker] && !document.getElementById('q-name').dataset.manual) {
+    document.getElementById('q-name').value = STOCKS[ticker];
+    name = STOCKS[ticker];
+  }
+
+  if (!ticker) {
+    preview.innerHTML = 'Enter a ticker to see which AIs are missing predictions.';
+    missingDiv.innerHTML = '';
+    btn.textContent = 'Open AIs ↗';
     return;
   }
-  var prompt = buildPrompt(name || '[Stock Name]', ticker || '[TICKER]');
+
+  var status = getMissingAIs(ticker);
+  if (status) {
+    var html = '';
+    status.missing.forEach(function(ai){ html += '<span class="q-tag q-tag-missing">&#x25CF; ' + ai + ' missing</span>'; });
+    status.done.forEach(function(ai){ html += '<span class="q-tag q-tag-done">&#x2713; ' + ai + '</span>'; });
+    missingDiv.innerHTML = html;
+    btn.textContent = status.missing.length > 0
+      ? 'Open ' + status.missing.length + ' Missing AI' + (status.missing.length > 1 ? 's' : '') + ' ↗'
+      : 'All AIs filled ✓';
+  } else {
+    missingDiv.innerHTML = '<span class="q-tag q-tag-missing">New stock — will open all 6 AIs</span>';
+    btn.textContent = 'Open All AIs ↗';
+  }
+
+  var displayName = name || STOCKS[ticker] || '[Stock Name]';
+  var prompt = buildPrompt(displayName, ticker);
   preview.innerHTML = '<strong>Prompt:</strong> ' + prompt.replace(/</g, '&lt;');
 }
 
-document.getElementById('q-name').addEventListener('input', updatePreview);
-document.getElementById('q-ticker').addEventListener('input', updatePreview);
+document.getElementById('q-ticker').addEventListener('input', function(){ updateUI(); });
+document.getElementById('q-name').addEventListener('input', function(){ this.dataset.manual = '1'; updateUI(); });
 
-function queryAllAIs() {
-  var name = document.getElementById('q-name').value.trim();
+function queryAIs() {
   var ticker = document.getElementById('q-ticker').value.trim().toUpperCase();
-  if (!name || !ticker) { alert('Please enter both stock name and ticker.'); return; }
+  var name = document.getElementById('q-name').value.trim() || STOCKS[ticker] || '';
+  if (!ticker || !name) { alert('Please enter both stock name and ticker.'); return; }
+
+  var status = getMissingAIs(ticker);
+  var toOpen = [];
+  if (status && status.missing.length > 0) {
+    status.missing.forEach(function(ai){ if (AI_URLS[ai]) toOpen.push(AI_URLS[ai]); });
+  } else if (!status) {
+    toOpen = Object.values(AI_URLS);
+  } else {
+    alert('All AIs already have predictions for ' + ticker + '!'); return;
+  }
+
   var prompt = buildPrompt(name, ticker);
   if (navigator.clipboard) { navigator.clipboard.writeText(prompt).catch(function(){}); }
-  Object.values(AI_URLS).forEach(function(fn){ window.open(fn(prompt), '_blank'); });
+  toOpen.forEach(function(fn){ window.open(fn(prompt), '_blank'); });
   var copied = document.getElementById('q-copied');
   copied.classList.add('show');
   setTimeout(function(){ copied.classList.remove('show'); }, 4000);
@@ -517,5 +609,6 @@ function queryAllAIs() {
 </script>
 </body>
 </html>
+
 
 
