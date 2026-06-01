@@ -100,7 +100,7 @@
         <p class="subtitle">Next 2 earnings reports Â· Multi-AI consensus table</p>
       </div>
       <div class="badges">
-        <span class="badge badge-ai">3 AI models</span>
+        <span class="badge badge-ai">2 AI models</span>
         <span class="badge badge-stocks">19 stocks</span>
         <span class="badge badge-updated">Updated 2026-06-01</span>
       </div>
@@ -227,28 +227,6 @@
             <td>+18% <span class="sep">\</span> +14% <span class="sep">\</span> +32% <span class="sep">\</span> <span style="color:#f87171;font-weight:500">30%</span></td>
             <td>+8% <span class="sep">\</span> +6% <span class="sep">\</span> +14% <span class="sep">\</span> <span style="color:#fbbf24;font-weight:500">40%</span></td>
             <td>+8% <span class="sep">\</span> +6% <span class="sep">\</span> +14% <span class="sep">\</span> <span style="color:#fbbf24;font-weight:500">46%</span></td>
-          </tr>
-          <tr>
-            <td class="ai-name">Grok</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
-            <td class="ph">â€”</td>
           </tr>
           <tr class="avg-row">
             <td class="ai-name">Average</td>
@@ -456,7 +434,6 @@ var STOCKS = {
 var AI_CONFIG = {
   Copilot:    { url: function(q){ return 'https://copilot.microsoft.com/?q=' + encodeURIComponent(q); }, auto: true  },
   Claude:     { url: function(q){ return 'https://claude.ai/new?q=' + encodeURIComponent(q); },   auto: false },
-  Grok:       { url: function(q){ return 'https://grok.com/'; },                                   auto: false }
 };
 var AI_URLS = {};
 Object.keys(AI_CONFIG).forEach(function(k){ AI_URLS[k] = AI_CONFIG[k].url; });
