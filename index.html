@@ -80,6 +80,14 @@
   .q-tag-done{border-color:rgba(74,222,128,.3);color:#4ade80;background:rgba(74,222,128,.06)}
   .query-copied{font-size:11px;color:#4ade80;margin-top:8px;opacity:0;transition:opacity .3s}
   .query-copied.show{opacity:1}
+  .fetch-btn{background:transparent;border:1px solid var(--accent);border-radius:8px;padding:10px 20px;color:var(--accent);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:all .2s;white-space:nowrap}
+  .fetch-btn:hover{background:rgba(124,106,255,.1)}
+  .fetch-btn:disabled{opacity:.4;cursor:not-allowed}
+  .fetch-status{font-size:11px;margin-top:8px;line-height:1.7;padding:10px 14px;border-radius:8px;border:1px solid var(--border);display:none}
+  .fetch-status.show{display:block}
+  .fetch-status.loading{color:var(--text3);background:var(--bg3)}
+  .fetch-status.success{color:#4ade80;background:rgba(74,222,128,.06);border-color:rgba(74,222,128,.2)}
+  .fetch-status.error{color:#f87171;background:rgba(248,113,113,.06);border-color:rgba(248,113,113,.2)}
 </style>
 </head>
 <body>
@@ -137,10 +145,12 @@
           <input class="query-input" id="q-name" type="text" placeholder="e.g. Nvidia">
         </div>
         <button class="query-btn" id="q-btn" onclick="queryAIs()">Open AIs &#x2197;</button>
+        <button class="fetch-btn" id="f-btn" onclick="fetchPredictions()">Fetch &amp; Fill Table</button>
       </div>
       <div class="query-missing" id="q-missing"></div>
       <div class="query-prompt" id="q-preview">Enter a ticker to see which AIs are missing predictions.</div>
       <div class="query-copied" id="q-copied">&#x2713; Prompt copied to clipboard &#x2014; paste into AIs marked &#x270D;paste</div>
+      <div class="fetch-status" id="f-status"></div>
     </div>
   </div>
 
@@ -564,6 +574,78 @@ function queryAIs() {
   var copied = document.getElementById('q-copied');
   copied.classList.add('show');
   setTimeout(function(){ copied.classList.remove('show'); }, 4000);
+}
+
+function confColor(c) {
+  return c < 40 ? '#f87171' : c <= 60 ? '#fbbf24' : '#4ade80';
+}
+
+function formatCell(d) {
+  var conf = parseInt(d.confidence) || 0;
+  return d.er1 + ' <span class="sep">\\</span> ' + d.er2 + ' <span class="sep">\\</span> ' + d.combined + ' <span class="sep">\\</span> <span style="color:' + confColor(conf) + ';font-weight:500">' + conf + '%</span>';
+}
+
+function fillTableCell(aiName, ticker, data) {
+  var headers = document.querySelectorAll('table thead th');
+  var colIndex = -1;
+  for (var i = 0; i < headers.length; i++) {
+    var t = headers[i].childNodes[0] ? headers[i].childNodes[0].textContent.trim() : '';
+    if (t === ticker) { colIndex = i; break; }
+  }
+  if (colIndex === -1) return false;
+  var rows = document.querySelectorAll('table tbody tr:not(.avg-row)');
+  for (var j = 0; j < rows.length; j++) {
+    var nc = rows[j].querySelector('.ai-name');
+    if (nc && nc.textContent.trim() === aiName) {
+      var cell = rows[j].cells[colIndex];
+      if (cell) {
+        cell.className = '';
+        cell.innerHTML = formatCell(data);
+        cell.style.transition = 'background .5s';
+        cell.style.background = 'rgba(124,106,255,.2)';
+        setTimeout((function(c){ return function(){ c.style.background=''; }; })(cell), 1500);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function fetchPredictions() {
+  var ticker = document.getElementById('q-ticker').value.trim().toUpperCase();
+  var name = document.getElementById('q-name').value.trim() || STOCKS[ticker] || '';
+  if (!ticker || !name) { alert('Enter stock name and ticker first.'); return; }
+  var status = getMissingAIs(ticker);
+  var toFetch = (status ? status.missing : Object.keys(AI_CONFIG)).filter(function(ai){ return ai !== 'Copilot'; });
+  if (toFetch.length === 0) { alert('No missing AI predictions to fetch for ' + ticker + '.'); return; }
+  var btn = document.getElementById('f-btn');
+  var sd = document.getElementById('f-status');
+  btn.disabled = true; btn.textContent = 'Fetching...';
+  sd.className = 'fetch-status show loading';
+  sd.innerHTML = '&#x23F3; Asking ' + toFetch.join(', ') + ' about ' + name + ' (' + ticker + ')...';
+  try {
+    var res = await fetch('https://markettable-worker.marketproject.workers.dev/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, ticker: ticker, ais: toFetch })
+    });
+    var json = await res.json();
+    var preds = json.predictions || {};
+    var filled = [], errors = [];
+    Object.keys(preds).forEach(function(ai) {
+      if (preds[ai].error) { errors.push(ai + ': ' + preds[ai].error); }
+      else { fillTableCell(ai, ticker, preds[ai]); filled.push(ai); }
+    });
+    var msg = '';
+    if (filled.length) msg += '&#x2713; Filled: ' + filled.join(', ') + '<br>';
+    if (errors.length) msg += '&#x26A0; ' + errors.join(' | ');
+    sd.className = 'fetch-status show ' + (filled.length ? 'success' : 'error');
+    sd.innerHTML = msg || '&#x2713; Done';
+  } catch(e) {
+    sd.className = 'fetch-status show error';
+    sd.innerHTML = '&#x2717; ' + e.message;
+  }
+  btn.disabled = false; btn.textContent = 'Fetch & Fill Table';
 }
 </script>
 </body>
